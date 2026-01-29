@@ -104,6 +104,7 @@ class BookingAPIClient:
             response.raise_for_status()
             return response.json()
     
+    
     async def toggle_failure_simulation(self, enable: bool) -> Dict[str, Any]:
         """Toggle failure simulation (admin)."""
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -111,12 +112,5 @@ class BookingAPIClient:
                 f"{self.base_url}/admin/simulate-failure",
                 json={"enable": enable}
             )
-            response.raise_for_status()
-            return response.json()
-    
-    async def get_failure_simulation_status(self) -> Dict[str, Any]:
-        """Get failure simulation status (admin)."""
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.get(f"{self.base_url}/admin/simulate-failure")
             response.raise_for_status()
             return response.json()

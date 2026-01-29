@@ -302,15 +302,6 @@ async def toggle_failure_simulation(request: SimulateFailureRequest):
     }
 
 
-@app.get("/admin/simulate-failure")
-async def get_failure_simulation_status():
-    """Get current failure simulation status."""
-    r = await event_publisher.get_redis()
-    value = await r.get("simulate_failure")
-    enabled = value == "1" if value else False
-    return {"simulate_failure": enabled}
-
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)
