@@ -57,7 +57,7 @@ class CompensationHandler:
             # Compensate quota if it was reserved
             if state.quota_reserved:
                 logger.info(f"Releasing quota for: {state.request_id}")
-                quota_released = await quota_service.release_quota(state.request_id)
+                quota_released = await quota_service.release_quota(state)
                 
                 if quota_released:
                     compensation_actions.append("Quota released")

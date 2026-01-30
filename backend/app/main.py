@@ -22,10 +22,12 @@ from app.models.schemas import (
     TransactionStatus,
     StatusUpdate,
     Gender,
-    MedicalService
+    MedicalService,
+    TransactionState,
+    EventType
 )
 from app.data.services import get_services_by_gender
-from app.saga.orchestrator import saga_orchestrator
+from app.saga.choreography import saga_choreographer
 from app.services.quota import quota_service
 from app.events.publisher import event_publisher
 
@@ -46,8 +48,17 @@ class StructuredLogFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
-        if hasattr(record, 'extra'):
-            log_data.update(record.extra)
+        # Safely extract extra fields added via logger.info(msg, extra={...})
+        standard_attrs = {
+            'args', 'asctime', 'created', 'exc_info', 'exc_text', 'filename',
+            'funcName', 'levelname', 'levelno', 'lineno', 'module', 'msecs',
+            'message', 'msg', 'name', 'pathname', 'process', 'processName',
+            'relativeCreated', 'stack_info', 'thread', 'threadName', 'extra'
+        }
+        for key, value in record.__dict__.items():
+            if key not in standard_attrs and not key.startswith('_'):
+                log_data[key] = value
+        
         return json.dumps(log_data)
 
 
@@ -62,6 +73,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Medical Clinic Booking System")
     logger.info(f"Daily discount quota: {settings.daily_discount_quota}")
     logger.info(f"Discount percentage: {settings.discount_percentage}%")
+    await saga_choreographer.start()
     yield
     logger.info("Shutting down Medical Clinic Booking System")
     await event_publisher.close()
@@ -153,29 +165,27 @@ async def create_booking(request: BookingRequest, background_tasks: BackgroundTa
             "services": request.service_ids
         }
     )
+    # Create initial transaction state
+    state = TransactionState(
+        user=request.user,
+        service_ids=request.service_ids
+    )
     
-    # Execute SAGA synchronously for simpler demo
-    # In production, this would be async with message queue
-    result = await saga_orchestrator.execute(request)
+    # Save initial state and publish first event
+    await event_publisher.save_transaction_state(state)
+    await event_publisher.publish_event(EventType.BOOKING_INITIATED, state.request_id)
     
-    if result.success:
-        return BookingResponse(
-            request_id=result.request_id,
-            status=TransactionStatus.COMPLETED,
-            message=f"Booking confirmed! Reference: {result.reference_id}"
-        )
-    else:
-        return BookingResponse(
-            request_id=result.request_id,
-            status=TransactionStatus.FAILED,
-            message=result.error_message or "Booking failed"
-        )
+    return BookingResponse(
+        request_id=state.request_id,
+        status=TransactionStatus.INITIATED,
+        message="Booking request received and being processed"
+    )
 
 
 @app.get("/booking/{request_id}/result", response_model=BookingResult)
 async def get_booking_result(request_id: str):
     """Get the final booking result."""
-    state = await saga_orchestrator.get_status(request_id)
+    state = await event_publisher.get_transaction_state(request_id)
     if not state:
         raise HTTPException(status_code=404, detail="Booking not found")
     
@@ -186,7 +196,7 @@ async def get_booking_result(request_id: str):
 @app.get("/booking/{request_id}/status")
 async def get_booking_status(request_id: str):
     """Get current booking status."""
-    state = await saga_orchestrator.get_status(request_id)
+    state = await event_publisher.get_transaction_state(request_id)
     if not state:
         raise HTTPException(status_code=404, detail="Booking not found")
     
@@ -209,7 +219,7 @@ async def stream_booking_status(request_id: str):
         start_time = datetime.utcnow()
         
         while True:
-            state = await saga_orchestrator.get_status(request_id)
+            state = await event_publisher.get_transaction_state(request_id)
             
             if not state:
                 yield f"data: {json.dumps({'error': 'Booking not found'})}\n\n"
@@ -231,7 +241,6 @@ async def stream_booking_status(request_id: str):
             # Check if terminal state
             if state.status in [
                 TransactionStatus.COMPLETED,
-                TransactionStatus.FAILED,
                 TransactionStatus.COMPENSATED,
                 TransactionStatus.QUOTA_EXHAUSTED
             ]:

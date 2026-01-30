@@ -122,6 +122,7 @@ class TransactionState(BaseModel):
     discount_reason: Optional[str] = None
     r1_eligible: bool = False
     quota_reserved: bool = False
+    quota_key: Optional[str] = None
     reference_id: Optional[str] = None
     error_message: Optional[str] = None
     events: List[Dict[str, Any]] = []

@@ -101,6 +101,7 @@ class QuotaService:
             if new_count <= settings.daily_discount_quota:
                 # Quota available
                 state.quota_reserved = True
+                state.quota_key = quota_key
                 state.discount_applied = True
                 state.final_price = state.base_price * (1 - state.discount_percentage / 100)
                 state.status = TransactionStatus.QUOTA_RESERVED
@@ -161,18 +162,19 @@ class QuotaService:
             
             return False, error_msg
     
-    async def release_quota(self, request_id: str) -> bool:
+    async def release_quota(self, state: TransactionState) -> bool:
         """
         Release a previously reserved quota slot (compensation).
         
         Returns:
             True if quota was released successfully
         """
-        logger.info(f"Releasing quota for: {request_id}")
+        logger.info(f"Releasing quota for: {state.request_id}")
         
         try:
             r = await self.get_redis()
-            quota_key = self._get_quota_key()
+            # Use the key stored in state, fallback to today's key if missing
+            quota_key = state.quota_key or self._get_quota_key()
             
             # Decrement quota
             new_count = await r.decr(quota_key)
@@ -182,7 +184,7 @@ class QuotaService:
                 await r.set(quota_key, 0)
             
             logger.info(
-                f"Quota released: {request_id}",
+                f"Quota released: {state.request_id}",
                 extra={"new_count": max(0, new_count)}
             )
             

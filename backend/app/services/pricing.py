@@ -37,9 +37,9 @@ class PricingService:
         """
         Check R1 discount eligibility.
         
-        R1: Apply 12% discount if:
-        - (user is female AND today is their birthday) OR
-        - (base price sum > ₹1000)
+        R1: Apply discount if:
+        - (User is female AND today is their birthday) -> 12%
+        - (Base price sum > ₹1000) -> 12%
         
         Returns:
             Tuple of (is_eligible, reason)

@@ -220,33 +220,37 @@ async def run_booking_flow(client: BookingAPIClient):
     console.print(f"[dim]Request ID: {request_id}[/dim]")
     console.print()
     
-    # Display events from the booking
+    # Display events in real-time using SSE
+    console.print("[bold]Transaction Events:[/bold]")
     try:
-        status_data = await client.get_booking_status(request_id)
-        events = status_data.get("events", [])
-        
-        console.print("[bold]Transaction Events:[/bold]")
-        for event in events:
-            event_type = event.get("type", "")
-            message = event.get("message", "")
+        async for update in client.stream_booking_status(request_id):
+            if "error" in update:
+                console.print(f"  [red]✗[/red] {update['error']}")
+                break
+                
+            if "final_result" in update:
+                result = update["final_result"]
+                if result.get("success"):
+                    print_success_result(result)
+                else:
+                    print_failure_result(result)
+                break
+                
+            # Print regular event
+            msg = update.get("message", "")
+            status = update.get("status", "")
             
-            if "failed" in event_type.lower() or "exhausted" in event_type.lower():
-                console.print(f"  [red]✗[/red] {message}")
-            elif "completed" in event_type.lower() or "reserved" in event_type.lower():
-                console.print(f"  [green]✓[/green] {message}")
-            elif "compensation" in event_type.lower():
-                console.print(f"  [yellow]↩[/yellow] {message}")
+            if "failed" in status.lower() or "exhausted" in status.lower():
+                console.print(f"  [red]✗[/red] {msg}")
+            elif "completed" in status.lower() or "reserved" in status.lower():
+                console.print(f"  [green]✓[/green] {msg}")
+            elif "compensat" in status.lower():
+                console.print(f"  [yellow]↩[/yellow] {msg}")
             else:
-                console.print(f"  [blue]→[/blue] {message}")
-        
-        # Get and display final result
-        result = await client.get_booking_result(request_id)
-        
-        if result.get("success"):
-            print_success_result(result)
-        else:
-            print_failure_result(result)
-            
+                console.print(f"  [blue]→[/blue] {msg}")
+                
+    except Exception as e:
+        console.print(f"[red]Error during status stream: {e}[/red]")
     except Exception as e:
         console.print(f"[red]Error getting booking result: {e}[/red]")
 
@@ -350,34 +354,37 @@ async def run_test_scenario(client: BookingAPIClient, scenario: int):
             console.print(f"[red]Error: {e}[/red]")
             return
     
-    # Display events
-    console.print(f"[dim]Request ID: {request_id}[/dim]")
-    console.print()
-    
-    status_data = await client.get_booking_status(request_id)
-    events = status_data.get("events", [])
-    
+    # Display events in real-time
     console.print("[bold]Transaction Events:[/bold]")
-    for event in events:
-        event_type = event.get("type", "")
-        message = event.get("message", "")
-        
-        if "failed" in event_type.lower() or "exhausted" in event_type.lower():
-            console.print(f"  [red]✗[/red] {message}")
-        elif "completed" in event_type.lower() or "reserved" in event_type.lower():
-            console.print(f"  [green]✓[/green] {message}")
-        elif "compensation" in event_type.lower():
-            console.print(f"  [yellow]↩[/yellow] {message}")
-        else:
-            console.print(f"  [blue]→[/blue] {message}")
-    
-    # Get and display result
-    result = await client.get_booking_result(request_id)
-    
-    if result.get("success"):
-        print_success_result(result)
-    else:
-        print_failure_result(result)
+    try:
+        async for update in client.stream_booking_status(request_id):
+            if "error" in update:
+                console.print(f"  [red]✗[/red] {update['error']}")
+                break
+                
+            if "final_result" in update:
+                result = update["final_result"]
+                if result.get("success"):
+                    print_success_result(result)
+                else:
+                    print_failure_result(result)
+                break
+                
+            # Print regular event
+            msg = update.get("message", "")
+            status = update.get("status", "")
+            
+            if "failed" in status.lower() or "exhausted" in status.lower():
+                console.print(f"  [red]✗[/red] {msg}")
+            elif "completed" in status.lower() or "reserved" in status.lower():
+                console.print(f"  [green]✓[/green] {msg}")
+            elif "compensat" in status.lower():
+                console.print(f"  [yellow]↩[/yellow] {msg}")
+            else:
+                console.print(f"  [blue]→[/blue] {msg}")
+                
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
     
     # Cleanup for scenario 3
     if scenario == 3:

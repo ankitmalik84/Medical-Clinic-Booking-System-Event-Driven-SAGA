@@ -50,11 +50,11 @@ This document outlines all assumptions made during the implementation of the Med
 15. **Redis Availability**: The system assumes Redis is available. Network failures would cause booking failures.
 
 ### Event-Driven Architecture
-16. **Synchronous SAGA**: For demo purposes, the SAGA executes synchronously in a single request. In production, this would use async message queues.
+16. **Event-Driven SAGA**: The SAGA is implemented using a **Choreography pattern**. Services are decoupled and communicate via Redis Streams. A background `SagaChoreographer` task listens for events and routes them.
 
-17. **Single Instance**: No distributed locking is implemented. The atomic Redis operations are sufficient for single-instance deployment.
+17. **Concurrency Handling**: Atomic Redis operations (INCR/DECR) are used for quota management to ensure consistency when multiple requests are processed concurrently.
 
-18. **Event Ordering**: Events are processed in order within a single request. Redis Streams maintain insertion order.
+18. **Eventual Consistency**: The system follows the SAGA pattern where each step is local, and consistency is achieved through events and compensations.
 
 ### Error Handling
 19. **Compensation Scope**: Compensation only handles quota release. Other resources (like database records) would need additional compensation in production.
@@ -66,7 +66,7 @@ This document outlines all assumptions made during the implementation of the Med
 ### API Design
 22. **Immediate Response**: The booking API returns immediately with the result (synchronous processing).
 
-23. **SSE Streaming**: Server-Sent Events are available for real-time updates but are optional. The CLI primarily uses polling.
+23. **SSE Streaming**: The CLI uses **Server-Sent Events (SSE)** to receive real-time, push-based updates from the backend during the transaction lifecycle.
 
 ### Deployment
 24. **GCP Cloud Run**: The backend is designed for Cloud Run deployment with:

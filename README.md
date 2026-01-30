@@ -12,10 +12,10 @@ An event-driven backend system for medical clinic bookings demonstrating SAGA ch
 ```
 
 ### Key Components
-- **Backend**: FastAPI with SAGA orchestrator
-- **Events**: Redis Streams for event-driven messaging
-- **State**: Redis for transaction state and quota management
-- **CLI**: Rich terminal interface for interactive demos
+- **Backend**: FastAPI with SAGA Choreography pattern
+- **Events**: Redis Streams for event-driven decoupled messaging
+- **State**: Redis for transaction state and atomic quota management
+- **CLI**: Rich terminal interface with real-time SSE streaming
 
 ## 📋 Business Rules
 
@@ -135,8 +135,8 @@ EventDrivenTransaction/
 │   │   ├── config.py         # Configuration
 │   │   ├── models/           # Pydantic schemas
 │   │   ├── services/         # Business logic
-│   │   ├── saga/             # SAGA orchestrator
-│   │   ├── events/           # Event publishing
+│   │   ├── saga/             # SAGA Choreography & Compensation
+│   │   ├── events/           # Redis Stream Event Publisher
 │   │   └── data/             # Service catalog
 │   ├── Dockerfile
 │   └── requirements.txt
