@@ -153,13 +153,3 @@ EventDrivenTransaction/
 
 - [Assumptions](docs/assumptions.md) - Design decisions and constraints
 - [Test Scenarios](docs/test_scenarios.md) - Detailed test case documentation
-
-## 🎥 Video Demonstrations
-
-1. **Terminal Demo** - All 3 test scenarios running
-2. **Code Walkthrough** - Architecture explanation
-3. **DevOps Logs** - Request flow and compensation logs
-
-## 📄 License
-
-MIT License
