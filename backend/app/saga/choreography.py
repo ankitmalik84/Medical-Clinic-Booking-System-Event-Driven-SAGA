@@ -99,7 +99,7 @@ class SagaChoreographer:
                 await booking_service.create_booking(state)
 
             elif event_type in [EventType.BOOKING_FAILED, EventType.QUOTA_EXHAUSTED, EventType.VALIDATION_FAILED]:
-                # 5. Any clinical failure -> Trigger Compensation
+                # 5. Any critical failure -> Trigger Compensation
                 if event_type != EventType.BOOKING_FAILED: # Booking failure handled separately in booking service
                      await self._handle_failure(state, state.error_message or "Process failed")
                 else:

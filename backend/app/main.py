@@ -238,11 +238,11 @@ async def stream_booking_status(request_id: str):
                     yield f"data: {update.model_dump_json()}\n\n"
                 last_event_count = len(state.events)
             
-            # Check if terminal state
+            # Check if terminal state (only COMPLETED or COMPENSATED end the stream;
+            # QUOTA_EXHAUSTED is not terminal so choreography can run compensation and we show it)
             if state.status in [
                 TransactionStatus.COMPLETED,
                 TransactionStatus.COMPENSATED,
-                TransactionStatus.QUOTA_EXHAUSTED
             ]:
                 # Send final result
                 from app.services.booking import booking_service

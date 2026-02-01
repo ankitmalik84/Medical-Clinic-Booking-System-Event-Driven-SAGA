@@ -282,16 +282,16 @@ async def run_test_scenario(client: BookingAPIClient, scenario: int):
         selected_ids = [services[0]["id"], services[1]["id"]]  # First two services
         
     elif scenario == 2:
-        # Negative case: Quota exhausted
+        # Negative case: Quota exhausted + compensation (no quota to release)
         console.print(Panel(
-            "[bold red]Test Scenario 2: Quota Exhausted[/bold red]\n\n"
-            "• Set quota to max limit\n"
-            "• Female user with birthday (would qualify for discount)\n"
-            "• Expected: Rejection due to quota exhaustion",
+            "[bold red]Test Scenario 2: Quota Exceeded + Compensation[/bold red]\n\n"
+            "• Set quota to max limit (100)\n"
+            "• Female user with birthday (R1 eligible)\n"
+            "• Expected: Quota exceeded → SAGA triggers compensation (no slot to release)",
             border_style="red"
         ))
         
-        # Set quota to max-1, then it will be exhausted
+        # Set quota to max so next booking hits quota exceeded
         await client.set_quota(100)  # Set to max
         await client.toggle_failure_simulation(False)
         

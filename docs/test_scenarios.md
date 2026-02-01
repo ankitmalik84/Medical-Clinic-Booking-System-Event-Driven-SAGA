@@ -54,10 +54,10 @@ Services booked:
 
 ---
 
-## Test Scenario 2: Quota Exhausted ❌
+## Test Scenario 2: Quota Exceeded + Compensation ❌
 
 ### Description
-A female user whose birthday is today attempts to book, but the daily discount quota has been exhausted.
+A female user whose birthday is today attempts to book, but the daily discount quota has been exhausted. The SAGA choreography treats this as a failure and **runs the same compensation path** as other failures; in this case there are no resources to release (quota was never reserved).
 
 ### Preconditions
 - Quota set to maximum (100/100 discounts used)
@@ -83,6 +83,9 @@ curl -X POST http://localhost:8080/admin/quota/set/100
 3. **Pricing Completed** → Base: ₹500, R1 eligible (birthday)
 4. **Quota Check Started** → Checking discount availability
 5. **Quota Exhausted** → Daily limit reached
+6. **Transaction Failed** → SAGA marks transaction as failed
+7. **Compensation Started** → Compensation logic is triggered (same path as other failures)
+8. **Compensation Completed** → Actions: None required (no quota was reserved to release)
 
 ### Expected Result
 ```
@@ -94,13 +97,13 @@ Request ID: XXXXXXXX
 ```
 
 ### What This Demonstrates
-- Quota exhaustion handling
-- Proper rejection message
-- No compensation needed (quota wasn't reserved)
+- **Compensation logic for quota failure**: The quota-exceeded use case goes through the same SAGA compensation path. The terminal shows "Compensation Started" and "Compensation Completed (Actions: None required)" so that compensation logic is clearly visible in the demo.
+- Quota exhaustion handling and proper rejection message
 - System-wide quota enforcement
+- Consistent failure handling: every failure (quota exceeded, booking failed, validation failed) triggers the compensation handler; the handler releases only resources that were actually reserved.
 
 ### Important Note
-This scenario shows that when quota is exhausted BEFORE reservation, no compensation is needed because no resources were allocated.
+When quota is exhausted we never reserve a slot (atomic INCR then DECR), so compensation has nothing to release. The scenario still **demonstrates compensation logic** because the compensation handler runs and is shown in real-time in the terminal.
 
 ---
 
@@ -171,11 +174,12 @@ pricing.started → pricing.completed → quota.check_started →
 quota.reserved → booking.started → booking.completed
 ```
 
-### Quota Exhausted (Scenario 2)
+### Quota Exceeded + Compensation (Scenario 2)
 ```
 booking.initiated → validation.started → validation.completed →
 pricing.started → pricing.completed → quota.check_started →
-quota.exhausted
+quota.exhausted → (failure) → compensation.started →
+compensation.completed (actions: none required)
 ```
 
 ### Compensated Transaction (Scenario 3)
