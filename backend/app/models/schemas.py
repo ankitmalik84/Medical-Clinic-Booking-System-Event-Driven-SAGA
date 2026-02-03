@@ -42,6 +42,7 @@ class EventType(str, Enum):
     PRICING_COMPLETED = "pricing.completed"
     QUOTA_CHECK_STARTED = "quota.check_started"
     QUOTA_RESERVED = "quota.reserved"
+    QUOTA_RESERVED_OVER_LIMIT = "quota.reserved_over_limit"  # display: reserve first, then check fails
     QUOTA_EXHAUSTED = "quota.exhausted"
     BOOKING_STARTED = "booking.started"
     BOOKING_COMPLETED = "booking.completed"

@@ -86,7 +86,7 @@ class EventPublisher:
     async def save_transaction_state(self, state: TransactionState) -> None:
         """Save transaction state to Redis."""
         r = await self.get_redis()
-        key = f"txn:{state.request_id}"
+        key = f"txn_v2:{state.request_id}"
         
         await r.set(
             key,
@@ -102,7 +102,7 @@ class EventPublisher:
     async def get_transaction_state(self, request_id: str) -> Optional[TransactionState]:
         """Retrieve transaction state from Redis."""
         r = await self.get_redis()
-        key = f"txn:{request_id}"
+        key = f"txn_v2:{request_id}"
         
         data = await r.get(key)
         if data:

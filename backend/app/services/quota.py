@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class QuotaService:
     """Manages daily discount quota (R2 rule)."""
     
-    QUOTA_KEY_PREFIX = "quota:discount:"
+    QUOTA_KEY_PREFIX = "quota_v2:discount:"
     
     def __init__(self):
         self._redis = None
@@ -125,26 +125,33 @@ class QuotaService:
                 
                 return True, f"Quota reserved (slot {new_count}/{settings.daily_discount_quota})"
             else:
-                # Quota exhausted - decrement back (we optimistically incremented)
-                await r.decr(quota_key)
-                
+                # Flow: 1) Reserve first (INCR committed), 2) Check fails (over limit), 3) Revert (compensation DECR)
+                state.quota_reserved = True
+                state.quota_key = quota_key
                 state.status = TransactionStatus.QUOTA_EXHAUSTED
                 state.error_message = "Daily discount quota reached. Please try again tomorrow."
+                # Event 1: Reserve first (commit) — so terminal shows "first reserved"
+                state.add_event(
+                    EventType.QUOTA_RESERVED_OVER_LIMIT,
+                    f"Quota slot reserved (over limit: {new_count}/{settings.daily_discount_quota}); check will fail",
+                    {"current_count": new_count, "max": settings.daily_discount_quota}
+                )
+                # Event 2: Check failed — then compensation will revert
                 state.add_event(
                     EventType.QUOTA_EXHAUSTED,
-                    "Daily discount quota has been exhausted",
-                    {"current_count": new_count - 1, "max": settings.daily_discount_quota}
+                    "Daily discount quota exceeded. Compensation will release reserved slot.",
+                    {"current_count": new_count, "max": settings.daily_discount_quota}
                 )
                 await event_publisher.save_transaction_state(state)
-                
+                # Only publish QUOTA_EXHAUSTED so choreography triggers compensation (not booking)
                 await event_publisher.publish_event(
                     EventType.QUOTA_EXHAUSTED,
                     state.request_id
                 )
                 
                 logger.warning(
-                    f"Quota exhausted: {state.request_id}",
-                    extra={"current_count": new_count - 1}
+                    f"Quota exceeded: {state.request_id} (compensation will release reserved slot)",
+                    extra={"current_count": new_count}
                 )
                 
                 return False, "Daily discount quota reached. Please try again tomorrow."
@@ -192,7 +199,7 @@ class QuotaService:
             
         except Exception as e:
             logger.error(
-                f"Failed to release quota: {request_id}",
+                f"Failed to release quota: {state.request_id}",
                 extra={"error": str(e)}
             )
             return False

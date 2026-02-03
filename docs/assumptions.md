@@ -59,30 +59,32 @@ This document outlines all assumptions made during the implementation of the Med
 ### Error Handling
 19. **Compensation Scope**: Compensation only handles quota release. Other resources (like database records) would need additional compensation in production.
 
-20. **Failure Simulation**: The `SIMULATE_BOOKING_FAILURE` flag is for testing only. Production would not have this feature.
+20. **Quota Exceeded and Compensation**: When the daily discount quota is already exhausted, the system still performs an atomic INCR (commits a reserve over the limit), then rejects the request and publishes QUOTA_EXHAUSTED. SAGA compensation then **reverts** that committed reserve by calling release_quota (DECR). This satisfies the requirement that "compensation logic for quota exceeds reverts something that has been committed earlier."
 
-21. **Retry Logic**: No automatic retries are implemented. Failed requests should be resubmitted by the user.
+21. **Failure Simulation**: The `SIMULATE_BOOKING_FAILURE` flag is for testing only. Production would not have this feature.
+
+22. **Retry Logic**: No automatic retries are implemented. Failed requests should be resubmitted by the user.
 
 ### API Design
-22. **Immediate Response**: The booking API returns immediately with the result (synchronous processing).
+23. **Immediate Response**: The booking API returns immediately with the result (synchronous processing).
 
-23. **SSE Streaming**: The CLI uses **Server-Sent Events (SSE)** to receive real-time, push-based updates from the backend during the transaction lifecycle.
+24. **SSE Streaming**: The CLI uses **Server-Sent Events (SSE)** to receive real-time, push-based updates from the backend during the transaction lifecycle.
 
 ### Deployment
-24. **GCP Cloud Run**: The backend is designed for Cloud Run deployment with:
+25. **GCP Cloud Run**: The backend is designed for Cloud Run deployment with:
     - Stateless containers
     - External Redis for state
     - 8080 port exposure
 
-25. **Environment Configuration**: All sensitive configuration is via environment variables, not hardcoded.
+26. **Environment Configuration**: All sensitive configuration is via environment variables, not hardcoded.
 
 ## Test Scenario Assumptions
 
-26. **Test Data**: Test scenarios use predefined user data (Priya Sharma, Anjali Mehta, Rahul Kumar).
+27. **Test Data**: Test scenarios use predefined user data (Priya Sharma, Anjali Mehta, Rahul Kumar).
 
-27. **Quota Manipulation**: Admin endpoints allow quota manipulation for testing. These should be secured in production.
+28. **Quota Manipulation**: Admin endpoints allow quota manipulation for testing. These should be secured in production.
 
-28. **Failure Injection**: The failure simulation toggle affects the booking service only, not validation or pricing.
+29. **Failure Injection**: The failure simulation toggle affects the booking service only, not validation or pricing.
 
 ## Out of Scope
 

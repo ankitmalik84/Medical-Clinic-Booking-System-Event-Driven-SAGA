@@ -240,12 +240,14 @@ async def run_booking_flow(client: BookingAPIClient):
             msg = update.get("message", "")
             status = update.get("status", "")
             
-            if "failed" in status.lower() or "exhausted" in status.lower():
+            if "compensat" in status.lower():
+                console.print(f"  [yellow]↩[/yellow] {msg}")
+            elif "reserved (over limit)" in msg.lower() or "reserved over limit" in msg.lower():
+                console.print(f"  [yellow]⊕[/yellow] {msg}")
+            elif "failed" in status.lower() or "exhausted" in status.lower():
                 console.print(f"  [red]✗[/red] {msg}")
             elif "completed" in status.lower() or "reserved" in status.lower():
                 console.print(f"  [green]✓[/green] {msg}")
-            elif "compensat" in status.lower():
-                console.print(f"  [yellow]↩[/yellow] {msg}")
             else:
                 console.print(f"  [blue]→[/blue] {msg}")
                 
@@ -282,12 +284,12 @@ async def run_test_scenario(client: BookingAPIClient, scenario: int):
         selected_ids = [services[0]["id"], services[1]["id"]]  # First two services
         
     elif scenario == 2:
-        # Negative case: Quota exhausted + compensation (no quota to release)
+        # Negative case: Quota exceeded → commit reserve, then compensation reverts it
         console.print(Panel(
             "[bold red]Test Scenario 2: Quota Exceeded + Compensation[/bold red]\n\n"
-            "• Set quota to max limit (100)\n"
+            "• Set quota to max (100)\n"
             "• Female user with birthday (R1 eligible)\n"
-            "• Expected: Quota exceeded → SAGA triggers compensation (no slot to release)",
+            "• Expected: Reserve committed over limit → failure → compensation reverts (Quota released)",
             border_style="red"
         ))
         
@@ -374,23 +376,24 @@ async def run_test_scenario(client: BookingAPIClient, scenario: int):
             msg = update.get("message", "")
             status = update.get("status", "")
             
-            if "failed" in status.lower() or "exhausted" in status.lower():
+            if "compensat" in status.lower():
+                console.print(f"  [yellow]↩[/yellow] {msg}")
+            elif "reserved (over limit)" in msg.lower() or "reserved over limit" in msg.lower():
+                console.print(f"  [yellow]⊕[/yellow] {msg}")
+            elif "failed" in status.lower() or "exhausted" in status.lower():
                 console.print(f"  [red]✗[/red] {msg}")
             elif "completed" in status.lower() or "reserved" in status.lower():
                 console.print(f"  [green]✓[/green] {msg}")
-            elif "compensat" in status.lower():
-                console.print(f"  [yellow]↩[/yellow] {msg}")
             else:
                 console.print(f"  [blue]→[/blue] {msg}")
                 
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
     
-    # Cleanup for scenario 3
-    if scenario == 3:
-        await client.toggle_failure_simulation(False)
-        
-        # Show compensation proof
+    # Show compensation proof for scenarios 2 and 3
+    if scenario in (2, 3):
+        if scenario == 3:
+            await client.toggle_failure_simulation(False)
         console.print()
         quota = await client.get_quota_status()
         console.print(f"[dim]Quota after compensation: {quota['current_count']}/{quota['max_quota']}[/dim]")

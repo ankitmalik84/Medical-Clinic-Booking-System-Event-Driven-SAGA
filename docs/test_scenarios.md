@@ -54,10 +54,10 @@ Services booked:
 
 ---
 
-## Test Scenario 2: Quota Exceeded + Compensation ❌
+## Test Scenario 2: Quota Exceeded + Compensation (Revert Committed Reserve) ❌
 
 ### Description
-A female user whose birthday is today attempts to book, but the daily discount quota has been exhausted. The SAGA choreography treats this as a failure and **runs the same compensation path** as other failures; in this case there are no resources to release (quota was never reserved).
+A female user whose birthday is today attempts to book, but the daily discount quota has already been exhausted. The system **commits** a quota reserve (atomic INCR) and then detects over-limit; SAGA treats this as a failure and **compensation reverts** the committed reserve by releasing the slot (DECR). This satisfies: *"compensation logic for quota exceeds reverts something that has been committed earlier."*
 
 ### Preconditions
 - Quota set to maximum (100/100 discounts used)
@@ -65,7 +65,7 @@ A female user whose birthday is today attempts to book, but the daily discount q
 
 ### Setup Steps
 ```bash
-# Reset and set quota to max
+# Set quota to max so next R1-eligible booking hits quota exceeded
 curl -X POST http://localhost:8080/admin/quota/set/100
 ```
 
@@ -82,10 +82,11 @@ curl -X POST http://localhost:8080/admin/quota/set/100
 2. **Validation Completed** → User data validated
 3. **Pricing Completed** → Base: ₹500, R1 eligible (birthday)
 4. **Quota Check Started** → Checking discount availability
-5. **Quota Exhausted** → Daily limit reached
-6. **Transaction Failed** → SAGA marks transaction as failed
-7. **Compensation Started** → Compensation logic is triggered (same path as other failures)
-8. **Compensation Completed** → Actions: None required (no quota was reserved to release)
+5. **Quota slot reserved (over limit)** → Reserve first (INCR committed); slot reserved over limit
+6. **Quota exceeded** → Check fails; request rejected
+7. **Transaction Failed** → SAGA marks transaction as failed
+8. **Compensation Started** → Compensation logic triggered
+9. **Compensation Completed** → **Quota released** (DECR reverts the committed reserve)
 
 ### Expected Result
 ```
@@ -96,14 +97,20 @@ Reason: Daily discount quota reached. Please try again tomorrow.
 Request ID: XXXXXXXX
 ```
 
+Terminal must show: **"Compensation completed. Actions: Quota released"** (and quota count back to 100 after the demo).
+
 ### What This Demonstrates
-- **Compensation logic for quota failure**: The quota-exceeded use case goes through the same SAGA compensation path. The terminal shows "Compensation Started" and "Compensation Completed (Actions: None required)" so that compensation logic is clearly visible in the demo.
+- **Technical Requirement 1.d**: SAGA choreography pattern with compensation logic — same failure path for all failures, compensation handler reverts committed work.
+- **Compensation for quota exceeds**: Something was **committed** (the over-limit quota slot via INCR); compensation **reverts** it (release_quota does DECR). Order: commit first, then failure, then compensation reverts.
 - Quota exhaustion handling and proper rejection message
 - System-wide quota enforcement
-- Consistent failure handling: every failure (quota exceeded, booking failed, validation failed) triggers the compensation handler; the handler releases only resources that were actually reserved.
 
-### Important Note
-When quota is exhausted we never reserve a slot (atomic INCR then DECR), so compensation has nothing to release. The scenario still **demonstrates compensation logic** because the compensation handler runs and is shown in real-time in the terminal.
+### Verification
+After the failure, quota must return to the pre-request value (e.g. 100):
+```bash
+curl http://localhost:8080/admin/quota
+# current_count should be 100 (the over-reserve was reverted)
+```
 
 ---
 
@@ -178,8 +185,8 @@ quota.reserved → booking.started → booking.completed
 ```
 booking.initiated → validation.started → validation.completed →
 pricing.started → pricing.completed → quota.check_started →
-quota.exhausted → (failure) → compensation.started →
-compensation.completed (actions: none required)
+quota.reserved_over_limit (reserve first) → quota.exhausted (check fails) →
+(failure) → compensation.started → compensation.completed (Quota released)
 ```
 
 ### Compensated Transaction (Scenario 3)
