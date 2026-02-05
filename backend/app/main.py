@@ -73,7 +73,10 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Medical Clinic Booking System")
     logger.info(f"Daily discount quota: {settings.daily_discount_quota}")
     logger.info(f"Discount percentage: {settings.discount_percentage}%")
-    await saga_choreographer.start()
+    if not settings.use_gcp_workflow:
+        await saga_choreographer.start()
+    else:
+        logger.info("USE_GCP_WORKFLOW=true: in-app choreographer disabled; use GCP Workflow to process bookings")
     yield
     logger.info("Shutting down Medical Clinic Booking System")
     await event_publisher.close()

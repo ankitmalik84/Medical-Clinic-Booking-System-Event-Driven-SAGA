@@ -54,6 +54,12 @@ class Settings(BaseSettings):
         alias="SIMULATE_BOOKING_FAILURE"
     )
     
+    # When True, do not start in-app SAGA choreographer; only GCP Workflow should process bookings
+    use_gcp_workflow: bool = Field(
+        default=False,
+        alias="USE_GCP_WORKFLOW"
+    )
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

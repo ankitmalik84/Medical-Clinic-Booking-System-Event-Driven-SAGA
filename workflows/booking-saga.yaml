@@ -1,0 +1,130 @@
+# GCP Workflows: Medical Clinic Booking SAGA
+# Orchestrates: validate -> price -> reserve_quota -> create_booking
+# On failure: release_quota (compensation)
+#
+# Input: { "request_id": "<uuid>", "validation_url": "...", "pricing_url": "..." }
+# Deploy: gcloud workflows deploy booking-saga --source=./workflows/booking-saga.yaml --location=REGION
+#
+main:
+  params: [input]
+  steps:
+    - init:
+        assign:
+          - request_id: ${input.request_id}
+          - validation_url: ${input.validation_url}
+          - pricing_url: ${input.pricing_url}
+
+    - step_validate:
+        try:
+          call: http.post
+          args:
+            url: ${validation_url + "/validate"}
+            body:
+              request_id: ${request_id}
+          result: validation_result
+        except:
+          as: e
+          steps:
+            - goto_compensate_1:
+                next: step_compensate
+
+    - check_validation_ok:
+        switch:
+          - condition: ${validation_result.body.success == false}
+            next: step_compensate
+        next: step_price
+
+    - step_price:
+        try:
+          call: http.post
+          args:
+            url: ${pricing_url + "/price"}
+            body:
+              request_id: ${request_id}
+          result: pricing_result
+        except:
+          as: e
+          steps:
+            - goto_compensate_2:
+                next: step_compensate
+
+    - check_pricing_ok:
+        switch:
+          - condition: ${pricing_result.body.success == false}
+            next: step_compensate
+        next: set_r1_eligible
+
+    - set_r1_eligible:
+        assign:
+          - r1_eligible: ${default(pricing_result.body.r1_eligible, false)}
+        next: step_quota_branch
+
+    - step_quota_branch:
+        switch:
+          - condition: ${r1_eligible == true}
+            next: do_reserve_quota
+        next: step_booking
+
+    - do_reserve_quota:
+        try:
+          call: http.post
+          args:
+            url: ${pricing_url + "/reserve-quota"}
+            body:
+              request_id: ${request_id}
+          result: quota_result
+        except:
+          as: e
+          steps:
+            - goto_compensate_3:
+                next: step_compensate
+
+    - check_quota_ok:
+        switch:
+          - condition: ${quota_result.body.success == false}
+            next: step_compensate
+        next: step_booking
+
+    - step_booking:
+        try:
+          call: http.post
+          args:
+            url: ${pricing_url + "/create-booking"}
+            body:
+              request_id: ${request_id}
+          result: booking_result
+        except:
+          as: e
+          steps:
+            - goto_compensate_4:
+                next: step_compensate
+
+    - check_booking_ok:
+        switch:
+          - condition: ${booking_result.body.success == false}
+            next: step_compensate
+        next: return_success
+
+    - return_success:
+        return:
+          success: true
+          request_id: ${request_id}
+          reference_id: ${booking_result.body.reference_id}
+          message: "Booking completed"
+
+    - step_compensate:
+        try:
+          call: http.post
+          args:
+            url: ${pricing_url + "/release-quota"}
+            body:
+              request_id: ${request_id}
+          result: compensate_result
+        except:
+          as: e
+
+    - return_failure:
+        return:
+          success: false
+          request_id: ${request_id}
+          message: "Transaction failed or compensated"

@@ -4,15 +4,31 @@ An event-driven backend system for medical clinic bookings demonstrating SAGA ch
 
 ## 🏗️ Architecture
 
+**Monolith (default):** One backend with in-app SAGA choreography.
+
+**GCP Workflows + microservices (assignment):**
+- **GCP Workflows** orchestrate the booking saga (validate → price → quota → booking; compensate on failure).
+- **2+ microservices**: `validation` (POST /validate), `pricing-booking` (POST /price, /reserve-quota, /create-booking, /release-quota).
+- **Gateway** (`backend/`) exposes REST API and Redis state; workflow calls the microservices via HTTP.
+
 ```
 ┌─────────────────┐      ┌──────────────────┐      ┌─────────────────┐
 │  CLI Client     │─────▶│  FastAPI Backend │─────▶│  External Redis │
 │  (Rich UI)      │ HTTP │  (GCP Cloud Run) │ TCP  │  (Redis Cloud)  │
 └─────────────────┘      └──────────────────┘      └─────────────────┘
+        │                         │
+        │                         │ (optional) GCP Workflow
+        │                         ▼
+        │                 ┌───────────────┐
+        │                 │ validation     │  pricing-booking
+        │                 │ (microservice) │  (microservice)
+        │                 └───────────────┘
 ```
 
 ### Key Components
-- **Backend**: FastAPI with SAGA Choreography pattern
+- **Backend (gateway)**: FastAPI with SAGA Choreography pattern; optional GCP Workflow trigger
+- **Microservices**: `services/validation`, `services/pricing-booking` for workflow-based orchestration
+- **Workflows**: `workflows/booking-saga.yaml` – GCP Workflows definition
 - **Events**: Redis Streams for event-driven decoupled messaging
 - **State**: Redis for transaction state and atomic quota management
 - **CLI**: Rich terminal interface with real-time SSE streaming
@@ -62,9 +78,14 @@ python main.py
 # Set Redis password
 export REDIS_PASSWORD=your_redis_password
 
-# Start with Docker Compose
+# Start with Docker Compose (gateway + validation + pricing-booking)
 docker compose up --build
 ```
+
+- **Gateway**: http://localhost:8080  
+- **Validation**: http://localhost:8081  
+- **Pricing-Booking**: http://localhost:8082  
+
 
 ## 🧪 Test Scenarios
 

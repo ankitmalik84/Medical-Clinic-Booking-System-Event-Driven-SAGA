@@ -1,3 +1,5 @@
+# Medical Clinic Booking – Gateway + 2 microservices (for GCP Workflows assignment)
+# Microservices: validation, pricing-booking (2+ services besides gateway)
 version: '3.8'
 
 services:
@@ -21,6 +23,37 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    restart: unless-stopped
+
+  validation:
+    build:
+      context: .
+      dockerfile: services/validation/Dockerfile
+    ports:
+      - "8081:8080"
+    environment:
+      - REDIS_HOST=${REDIS_HOST:-redis-13962.c10.us-east-1-2.ec2.cloud.redislabs.com}
+      - REDIS_PORT=${REDIS_PORT:-13962}
+      - REDIS_USERNAME=${REDIS_USERNAME:-default}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    restart: unless-stopped
+
+  pricing-booking:
+    build:
+      context: .
+      dockerfile: services/pricing-booking/Dockerfile
+    ports:
+      - "8082:8080"
+    environment:
+      - REDIS_HOST=${REDIS_HOST:-redis-13962.c10.us-east-1-2.ec2.cloud.redislabs.com}
+      - REDIS_PORT=${REDIS_PORT:-13962}
+      - REDIS_USERNAME=${REDIS_USERNAME:-default}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - DAILY_DISCOUNT_QUOTA=${DAILY_DISCOUNT_QUOTA:-100}
+      - DISCOUNT_PERCENTAGE=${DISCOUNT_PERCENTAGE:-12.0}
+      - HIGH_VALUE_THRESHOLD=${HIGH_VALUE_THRESHOLD:-1000.0}
+      - TIMEZONE=Asia/Kolkata
+      - SIMULATE_BOOKING_FAILURE=${SIMULATE_BOOKING_FAILURE:-false}
     restart: unless-stopped
 
 networks:
